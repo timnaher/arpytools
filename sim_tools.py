@@ -5,10 +5,6 @@ import scipy.signal as sig
 import random
 import cmath
 
-from AR_tools import *
-import tqdm
-from numba import njit, prange
-
 
 
 
@@ -68,11 +64,10 @@ def phase_diffusion(freq,
     phases = np.cumsum(lin_incr + brown_incr, axis=0)
 
     if random_start: # if random start, add a random phase
-        phases = ((phases % (2 * np.pi)) + random.uniform(0, 2*np.pi)) % (2*np.pi)
-    else:
-        phases = phases % (2 * np.pi)
+        phases += random.uniform(0, 2*np.pi)
 
-    return phases 
+    return phases % (2 * np.pi)
+
 
 def sim_lfp(osc_freq,nChannels=1,eps=0.1,FS=1000,nSamples=1000,pink_noise_level=1,random_start=True):
     """simulates an lfp singla with a known noisey phase diffusion oscillator and some 1/f noise
@@ -95,7 +90,7 @@ def sim_lfp(osc_freq,nChannels=1,eps=0.1,FS=1000,nSamples=1000,pink_noise_level=
 
     return lfp, pdata
 
-def propagate_phase(lfp,WIN_SIZE,TARGET_FREQ,FS,NPAD,PROP_LENGTH,window_stop,t_before_ct,taper):
+def propagate_phase(lfp,WIN_SIZE,TARGET_FREQ,FS,NPAD,PROP_LENGTH,window_stop,taper):
     """propagates the phase based on a selected fourier coefficient of the lfp
 
     Args:
@@ -111,60 +106,15 @@ def propagate_phase(lfp,WIN_SIZE,TARGET_FREQ,FS,NPAD,PROP_LENGTH,window_stop,t_b
         array: propagated phase from beginning of window to selected point
     """
 
-    # tapered fft to get FCs
-    # multiply snippet by taper
-    snippet    = lfp[ int(window_stop-WIN_SIZE):window_stop] * taper
-    freqs      = np.fft.rfftfreq(NPAD, 1 / FS)
+    # hann tapered fft to get FCs
+    snippet    = lfp[ (window_stop-WIN_SIZE):window_stop] * taper
+    freqs      = np.fft.rfftfreq(NPAD, 1 / FS)                                    
     frq_indx   = np.where(freqs==TARGET_FREQ)[0]
     spec       = np.fft.rfft(snippet,n=NPAD)
-    ph         = np.angle(spec)[frq_indx]
+    ph         = np.angle(spec)[frq_indx]                                               
+    prop_ph    = (ph + TARGET_FREQ * 2 * np.pi / FS * np.arange(PROP_LENGTH)) % (2 * np.pi) # modulo 2pi, propagated phase
 
-    # get the length to propagate the phase on
-    plength = len(taper) + PROP_LENGTH - t_before_ct # this propagates from the start of the taper on
-    phase = (ph + TARGET_FREQ * 2 * np.pi / FS * np.arange(plength)) % (2 * np.pi)
-    return phase[t_before_ct:]
-
-
-def ar_fourier(lfp,WIN_SIZE,TARGET_FREQ,FS,NPAD,PROP_LENGTH,window_stop,t_before_ct,taper):
-    """propagates the phase based on a selected fourier coefficient of the lfp
-    NOTE:
-    
-    
-    """
-    # tapered fft to get FCs on extrp data
-    snippet    = lfp[ int(window_stop-WIN_SIZE/2) : int(window_stop+WIN_SIZE/2)] * taper
-    freqs      = np.fft.rfftfreq(NPAD, 1 / FS)
-    frq_indx   = np.where(freqs==TARGET_FREQ)[0]
-    spec       = np.fft.rfft(snippet,n=NPAD)
-    # ph reflects the phase of estimate at the beginning of the taper, therefore the phase
-    # at window_stop-WIN_SIZE/2. In order to get the phase at the critical time, we need to
-    # propagate it forward by the length of the taper window divided by 2
-    ph         = np.angle(spec)[frq_indx]
-    # get the length to propagate the phase on
-    plength = len(taper) + PROP_LENGTH - t_before_ct # this propagates from the start of the taper on
-    phase = (ph + TARGET_FREQ * 2 * np.pi / FS * np.arange(plength)) % (2 * np.pi)
-    return phase[t_before_ct:]
-
-def ar_fit_interpolation(lfp,PROP_LENGTH,FS,AR_ORD):
-    # for fitting, deal with the lfp shape. Right now its time x trials
-    if len(lfp.shape) > 1:
-        time, ntrials = lfp.shape
-        lfp    = lfp.reshape((time,1,ntrials))
-
-    else:
-        time    = int(lfp.shape[0])
-        lfp     = lfp[:,np.newaxis,np.newaxis] # add 2 empty axes
-        ntrials = 1
-
-
-    # get the lfp in the right shape: time x variables(channels) x trials
-    w, A, C, th = arfit(v=lfp,pmin=1,pmax=AR_ORD,selector='sbc',no_const=False)
-    exdat = np.empty((time+PROP_LENGTH ,ntrials ))
-
-    for iTrial in range(ntrials):
-        exdat[:,iTrial] = ar_extrap(v=np.squeeze(lfp[:,:,iTrial]),A=A,extrasamp=PROP_LENGTH,C=C,Fs=FS)
-
-    return exdat, w, A, C, th
+    return prop_ph
 
 
 def get_w_at(k,N):

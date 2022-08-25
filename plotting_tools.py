@@ -14,5 +14,3 @@ def plot_phase_diffusion(lfp,pdata,DIFFSTART=None,PROP_LENGTH=None,prop_phase=No
     # Optional: plot the propagated phase
     ax[1].plot(np.arange(DIFFSTART,DIFFSTART + PROP_LENGTH),prop_phase, label='propagated phase',color="red")
 
-    return fig, ax
-
