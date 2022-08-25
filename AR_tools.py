@@ -34,11 +34,15 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
     # compute QR factorization for model of order pmax
     R, scale   = arqr(v, pmax, mcor)
 
-    #TODO: for now we take the inpuit order as the maximum order. In the future we should include the search through the orders
+    sbc, fpe, _ , _ = arord(R, m, mcor, ne, pmin, pmax)
 
-    # temporary
-    popt         = pmax
-    nnp           = m*popt + mcor # number of parameter vectors of length m
+    # get index iopt of order that minimizes the order selection criterion specified by the variable selector
+    if selector == 'sbc':
+        popt = pmin + np.argmin(sbc)+1
+    elif selector == 'fpe':
+        popt = pmin + np.argmin(fpe)+1
+
+    nnp = m*popt + mcor # number of parameter vectors of length m
 
 
     # decompose R for the optimal model order popt according to 
@@ -123,6 +127,71 @@ def arqr(v, p, mcor):
 
     return  np.triu(R), scale
 
+def arord(R, m, mcor, ne, pmin, pmax):
+
+    imax 	  = pmax-pmin+1 # maximum index of output vectors
+
+    # initialize output vectors
+    sbc     = np.zeros((imax))     # Schwarz's Bayesian Criterion
+    fpe     = np.zeros((imax))     # log of Akaike's Final Prediction Error
+    logdp   = np.zeros((imax))     # determinant of (scaled) covariance matrix
+    num_p      = np.zeros((imax))     # number of parameter vectors of length m
+
+
+
+    num_p[imax-1]= m*pmax+mcor
+
+    #Get lower right triangle R22 of R: 
+
+    #   | R11  R12 |
+    # R=|          |
+    #   | 0    R22 |
+
+
+    R22     = R[int(num_p[imax-1]+1)-2 : int(num_p[imax-1]+m)-1, int(num_p[imax-1]+1)-2 : int(num_p[imax-1]+m)-1]
+
+
+    # From R22, get inverse of residual cross-product matrix for model of order pmax
+    invR22  = np.linalg.inv(R22) # TODO: this is slights different from MATLAB
+    Mp      = invR22*invR22.T
+
+    # For order selection, get determinant of residual cross-product matrix
+    #       logdp = log det(residual cross-product matrix)
+
+    logdp[imax-1] = 2 * np.log(np.abs(np.prod(np.diag(R22))))
+
+
+    # Compute approximate order selection criteria for models of  order pmin:pmax
+    i = imax
+
+    for p in np.arange(pmax,pmin-1,-1) :
+        num_p[i-1]   = m*p + mcor	# number of parameter vectors of length m
+
+        if p < pmax:
+            # Downdate determinant of residual cross-product matrix
+            # Rp: Part of R to be added to Cholesky factor of covariance matrix
+            Rp       = R[int(num_p[i-1]+1)-2 : int(num_p[i-1]+m)-1, int(num_p[imax-1]+1)-2:int(num_p[imax-1]+m)-1]
+
+            # Get Mp, the downdated inverse of the residual cross-product matrix, using the Woodbury formula
+            L        = np.linalg.cholesky(np.eye(m) + Rp*Mp*Rp.T).T
+
+            N        = scipy.linalg.solve(L,Rp*Mp)
+            Mp       = Mp - N.T*N
+
+            # Get downdated logarithm of determinant
+            logdp[i-1] = logdp[i] + 2*np.log(np.abs(np.prod(np.diag(L))))
+
+        # Schwarz's Bayesian Criterion
+        sbc[i-1] = logdp[i-1]/m - np.log(ne) * (ne-num_p[i-1])/ne
+
+        # logarithm of Akaike's Final Prediction Error
+        fpe[i-1] = logdp[i-1]/m - np.log(ne*(ne-num_p[i-1])/(ne+num_p[i-1]))
+
+        i -= 1
+
+    return sbc, fpe, logdp, num_p
+
+    
 
 def ar_interp(v,A,extrasamp,Fs):
     Fs = 1000
