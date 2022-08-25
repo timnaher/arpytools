@@ -3,21 +3,35 @@ import numpy as np
 import scipy.linalg
 import matplotlib.pyplot as plt
 
-def arfit(v,pmin,pmax,selector,no_const):
+def arfit(v,pmin,pmax,selector='sbc',no_const=False):
     """
     This function fits a polynomial to a set of data points.
     The polynomial is defined by the number of parameters pmin to pmax."""
     # n:   number of time steps (per realization)
     # m:   number of variables (dimension of state vectors) 
     # ntr: number of realizations (trials)
+
     n,m,ntr = v.shape
 
+    # input checks
+    # TODO: is this a good way of checking the input?
+    if (not isinstance(pmin, int)) | (not isinstance(pmax, int)):
+        raise ValueError("Orders must be integers")
+
+    if (pmax < pmin):
+        raise ValueError('PMAX must be greater than or equal to PMIN.')
+
     mcor = 0 if no_const == True else 1 # fit the constant if mcor = 1
-    selector = 'sbc' # use sbc as order selection criterion # TODO: add the selector criterion later on
 
 
-    ne      = ntr*(n-pmax)
-    npmax	= m*pmax+mcor
+    ne      = ntr*(n-pmax) # number of block equations of size m
+    npmax	= m*pmax+mcor # maximum number of parameter vectors of length m
+
+
+    if (ne <= npmax):
+        raise ValueError('Time series too short.')
+
+    # compute QR factorization for model of order pmax
     R, scale   = arqr(v, pmax, mcor)
 
     #TODO: for now we take the inpuit order as the maximum order. In the future we should include the search through the orders
@@ -134,12 +148,12 @@ def ar_interp(v,A,extrasamp,Fs):
 
 
 time = np.arange(0, 2, 0.01)
-v1    = np.sin(2*np.pi*4*time) + np.random.rand(len(time))/10
+v1    = np.sin(2*np.pi*4*time) #+ np.random.rand(len(time))/10
 v2   = np.cos(2*np.pi*4*time) #+ np.random.rand(len(time))
 #v3   = np.cos(2*np.pi*7*time) + np.random.rand(len(time))
 
 
-v    = np.vstack((v1,v2)).T
+v    = np.vstack((v1,v1)).T
 v    = v.reshape((v.shape[0],1,2))
 
 w, A, C, th = arfit(v,1,20,selector='sbc',no_const=False)
@@ -210,6 +224,19 @@ The polynomial is defined by the number of parameters pmin to pmax."""
 n,m,ntr = v.shape
 
 #TODO: include input check and set defaults
+
+
+
+
+
+
+
+
+
+
+
+
+
 mcor     = 1 # fit the intercept vector
 selector = 'sbc' # use sbc as order selection criterion
 
