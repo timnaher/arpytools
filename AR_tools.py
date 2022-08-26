@@ -23,7 +23,6 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
 
     mcor = 0 if no_const == True else 1 # fit the constant if mcor = 1
 
-
     ne      = ntr*(n-pmax) # number of block equations of size m
     npmax	= m*pmax+mcor # maximum number of parameter vectors of length m
 
@@ -143,9 +142,9 @@ def arord(R, m, mcor, ne, pmin, pmax):
 
     #Get lower right triangle R22 of R: 
 
-    #   | R11  R12 |
-    # R=|          |
-    #   | 0    R22 |
+    #    | R11  R12 |
+    # R= |          |
+    #    | 0    R22 |
 
 
     R22     = R[int(num_p[imax-1]+1)-2 : int(num_p[imax-1]+m)-1, int(num_p[imax-1]+1)-2 : int(num_p[imax-1]+m)-1]
@@ -191,7 +190,7 @@ def arord(R, m, mcor, ne, pmin, pmax):
 
     return sbc, fpe, logdp, num_p
 
-    
+
 
 def ar_interp(v,A,extrasamp,Fs):
     Fs = 1000
