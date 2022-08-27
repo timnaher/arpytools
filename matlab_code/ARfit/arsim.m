@@ -103,21 +103,27 @@ function [v]=arsim(w,A,C,n_ntr,ndisc)
   % able to make use of Matlab's vectorization capabilities, the
   % cases p=1 and p>1 must be treated separately.
   if p==1
+      
     for itr=1:ntr
       for k=2:ndisc+n+1; 
         x(1,:) = u(k-1,:,itr)*AT;
         u(k,:,itr) = x + randvec(k-1,:,itr);
       end
     end
+    
+    
   else
+      
     for itr=1:ntr
       for k=p+1:ndisc+n+p; 
         for j=1:p;
-          x(j,:) = u(k-j,:,itr)*AT((j-1)*m+1:j*m,:);
+          x(j,:) = u(k-j,:,itr) * AT((j-1)*m+1:j*m,:);
         end
         u(k,:,itr) = sum(x)+randvec(k-p,:,itr);
       end
     end
+    
+    
   end
   
   % return only the last n simulated state vectors
