@@ -212,6 +212,43 @@ def ar_interp(v,A,extrasamp,Fs):
 
     return exdat
 
+
+def adjph(x):  # sourcery skip: inline-immediately-returned-variable
+    #  Given a complex matrix X, OX=ADJPH(X) returns the complex matrix OX
+    #  that is obtained from X by multiplying column vectors of X with
+    #  phase factors exp(i*phi) such that the real part and the imaginary
+    #  part of each column vector of OX are orthogonal and the norm of the
+    #  real part is greater than or equal to the norm of the imaginary
+    #  part.
+    #  ADJPH is called by ARMODE.
+    #  Reference:
+    #  P.J. Brockwell and R.A. Davis, "Orthogonal Array Analysis,
+    #  Second Edition", Prentice-Hall, pp. 30-31, 2000.
+    #  ------------------------------------------------------------------
+    #  Input:
+    #  X      Complex NxM matrix.
+    #  ------------------------------------------------------------------
+    #  Output:
+    #  OX     Complex NxM matrix such that the real part of each column
+    #         vector of OX is orthogonal and the norm of the real part is
+    #         greater than or equal to the norm of the imaginary part.
+
+
+    #x = np.array( [[3+4j, 4+3j] , [12-1j, 6+3j]])
+
+    #  Check input
+    [n,m] = x.shape
+    ox    = np.zeros((n,m),dtype=complex)
+    for jj in range(m):
+        a       = np.real(x[:,jj])
+        b       = np.imag(x[:,jj])
+        phi     = 0.5 * np.arctan( 2 * np.sum(a*b) / (b.T @ b - a.T @ a) )
+        bnorm   = np.linalg.norm(np.sin(phi) * a+np.cos(phi) * b)    # norm of new imaginary part
+        anorm   = np.linalg.norm(np.cos(phi) * a+np.sin(phi) * b)    # norm of new real part
+        if bnorm > anorm:
+            phi = phi - np.pi/2 if phi < 0 else phi + np.pi/2
+        ox[:,jj] = x[:,jj] * np.exp(1j*phi)
+
 # %%
 
 
