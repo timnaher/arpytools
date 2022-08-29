@@ -53,9 +53,10 @@ def ar_sim(w,A,C,n,ntr,ndisc=10**3):
         return
     
     # TODO: @ Gregor I can check if all eigenvalues of matrix are positive, right?
-    if not np.all(np.linalg.eigvals(C) > 0):
-        raise ValueError('The covariance matrix C must be positive definite')
-        return
+    # TODO: adjust this for the univariate case where AR is just a scalar
+    #if not np.all(np.linalg.eigvals(C) > 0):
+    #    raise ValueError('The covariance matrix C must be positive definite')
+    #    return
 
     # Choletzky decomposition of C
     R = cholesky(C,lower=False) # Upper triangular matrix

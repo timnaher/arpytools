@@ -1,6 +1,7 @@
 # %%
 import numpy as np
-import scipy.linalg
+import numpy.linalg as la
+import scipy.linalg 
 import matplotlib.pyplot as plt
 
 def arfit(v,pmin,pmax,selector='sbc',no_const=False):
@@ -37,18 +38,18 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
 
     # get index iopt of order that minimizes the order selection criterion specified by the variable selector
     if selector == 'sbc':
-        popt = pmin + np.argmin(sbc)+1
+        popt = pmin + np.argmin(sbc)
     elif selector == 'fpe':
-        popt = pmin + np.argmin(fpe)+1
+        popt = pmin + np.argmin(fpe)
 
     nnp = m*popt + mcor # number of parameter vectors of length m
 
 
     # decompose R for the optimal model order popt according to 
     #
-    #   | R11  R12 |
-    # R=|          |
-    #   | 0    R22 |
+    #     | R11  R12 |
+    # R = |          |
+    #     | 0    R22 |
     #
 
     R11   = R[0:nnp, 0:nnp]
@@ -59,8 +60,8 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
         if (mcor == 1):
             # improve condition of R11 by rescaling the first column
             con = np.max(scale[1:npmax+m]) / scale[0]
-            R11[0,0] = R11[0,0] * con
-        Aaug = scipy.linalg.solve(R11, R12).T
+            R11[:,0] = R11[:,0] * con
+        Aaug = la.solve(R11, R12).T
 
         # return coefficint matrix A and intercept vector w separately
         if (mcor == 1):
@@ -81,7 +82,7 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
 
     # return covariance matrix
     dof = ne - nnp  # number of block degrees of freedom
-    C   = R22.T * R22/dof # bias-corrected estimate of covariance matrix
+    C   = R22.T @ R22/dof # bias-corrected estimate of covariance matrix
 
     invR11 = np.linalg.inv(R11)
 
@@ -89,15 +90,17 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
         # undo condition improving scaling
         invR11[0, :] = invR11[0, :] * con
 
-    Uinv   = invR11*invR11.T
+    Uinv   = invR11@invR11.T
     frow   = np.concatenate([np.array([dof]), np.zeros((Uinv.shape[1]-1))], axis=0)
     th     = np.vstack((frow,Uinv))
+
+
 
     return w, A, C, th
 
 
 
-
+# TODO: commented out reshape ! CHECK THIS!
 def arqr(v, p, mcor):
     n,m,ntr = v.shape
     ne     = ntr*(n-p)  # number of block equations of size m
@@ -113,18 +116,18 @@ def arqr(v, p, mcor):
     for itr in range(1,ntr+1):
         for j in range(1,p+1):
             myarr = np.squeeze(v[(p-j+1)-1 : (n-j), :, (itr)-1]) # changes the indexing from python to matlab
-            K[ ((n-p)*(itr-1) + 1)-1 : ((n-p)*itr), (mcor+m*(j-1)+1)-1 : (mcor+m*j)] = myarr.reshape((myarr.shape[0],1)) # TODO: check if this is correct
-        
+            K[ ((n-p)*(itr-1) + 1)-1 : ((n-p)*itr), (mcor+m*(j-1)+1)-1 : (mcor+m*j)] = myarr# myarr.reshape((myarr.shape[0],1)) # TODO: check if this is correct
+
         myarr2 = np.squeeze(v[ (p+1)-1:n,:,itr-1 ])
-        K[ ((n-p)*(itr-1) + 1)-1 : ((n-p)*itr), (nnp+1)-1 : nnp+m ] = myarr2.reshape((myarr2.shape[0],1))
+        K[ ((n-p)*(itr-1) + 1)-1 : ((n-p)*itr), (nnp+1)-1 : nnp+m ] = myarr2#.reshape((myarr2.shape[0],1))
 
     q     = nnp + m  # number of columns of K
     # times epsilon as floating point number precision
     delta = (q**2 + q + 1) * np.finfo(np.float64).eps # Higham's choice for a Cholesky factorization
     scale = np.sqrt(delta) * np.sqrt( np.sum(K**2,axis=0))
-    Q, R  = scipy.linalg.qr(np.vstack((K,np.diag(scale))))
+    Q, R  = la.qr(np.vstack((K,np.diag(scale))))
 
-    return  np.triu(R), scale
+    return  R, scale
 
 def arord(R, m, mcor, ne, pmin, pmax):
 
@@ -134,7 +137,7 @@ def arord(R, m, mcor, ne, pmin, pmax):
     sbc     = np.zeros((imax))     # Schwarz's Bayesian Criterion
     fpe     = np.zeros((imax))     # log of Akaike's Final Prediction Error
     logdp   = np.zeros((imax))     # determinant of (scaled) covariance matrix
-    num_p      = np.zeros((imax))     # number of parameter vectors of length m
+    num_p   = np.zeros((imax))     # number of parameter vectors of length m
 
 
 
@@ -147,17 +150,17 @@ def arord(R, m, mcor, ne, pmin, pmax):
     #    | 0    R22 |
 
 
-    R22     = R[int(num_p[imax-1]+1)-2 : int(num_p[imax-1]+m)-1, int(num_p[imax-1]+1)-2 : int(num_p[imax-1]+m)-1]
+    R22     = R[int(num_p[imax-1]+1)-1 : int(num_p[imax-1]+m), int(num_p[imax-1]+1)-1 : int(num_p[imax-1]+m)]
 
 
     # From R22, get inverse of residual cross-product matrix for model of order pmax
     invR22  = np.linalg.inv(R22) # TODO: this is slights different from MATLAB
-    Mp      = invR22*invR22.T
+    Mp      = invR22@invR22.T
 
     # For order selection, get determinant of residual cross-product matrix
     #       logdp = log det(residual cross-product matrix)
 
-    logdp[imax-1] = 2 * np.log(np.abs(np.prod(np.diag(R22))))
+    logdp[imax-1] = 2 * np.log(np.abs(np.prod( np.diag(R22) )))
 
 
     # Compute approximate order selection criteria for models of  order pmin:pmax
@@ -169,10 +172,10 @@ def arord(R, m, mcor, ne, pmin, pmax):
         if p < pmax:
             # Downdate determinant of residual cross-product matrix
             # Rp: Part of R to be added to Cholesky factor of covariance matrix
-            Rp       = R[int(num_p[i-1]+1)-2 : int(num_p[i-1]+m)-1, int(num_p[imax-1]+1)-2:int(num_p[imax-1]+m)-1]
+            Rp       = R[int(num_p[i-1]+1)-1 : int(num_p[i-1]+m), int(num_p[imax-1]+1)-1:int(num_p[imax-1]+m)]
 
             # Get Mp, the downdated inverse of the residual cross-product matrix, using the Woodbury formula
-            L        = np.linalg.cholesky(np.eye(m) + Rp*Mp*Rp.T).T
+            L        = np.linalg.cholesky(np.eye(m) + Rp@Mp@Rp.T).T
 
             N        = scipy.linalg.solve(L,Rp*Mp)
             Mp       = Mp - N.T*N
@@ -251,7 +254,7 @@ def adjph(x):  # sourcery skip: inline-immediately-returned-variable
 
 # %%
 
-
+'''
 time = np.arange(0, 2, 0.01)
 v1    = np.sin(2*np.pi*4*time) #+ np.random.rand(len(time))/10
 v2   = np.cos(2*np.pi*4*time) #+ np.random.rand(len(time))
@@ -413,3 +416,4 @@ ax[0].plot(time,v[:,0,0])
 ax[1].plot(A[0,:])
 
 # %%
+'''
