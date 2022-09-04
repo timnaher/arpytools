@@ -5,16 +5,29 @@ import scipy.linalg
 import matplotlib.pyplot as plt
 
 def arfit(v,pmin,pmax,selector='sbc',no_const=False):
-    """
-    This function fits a polynomial to a set of data points.
-    The polynomial is defined by the number of parameters pmin to pmax."""
-    # n:   number of time steps (per realization)
-    # m:   number of variables (dimension of state vectors) 
-    # ntr: number of realizations (trials)
+    """ This function fits a polynomial to a set of data points.
+    The polynomial is defined by the number of parameters pmin to pmax
 
-    n,m,ntr = v.shape
+    :param v: time series data (time x variables x trials)
+    :type v: numpy array
+    :param pmin: minimum order of the polynomial which to check
+    :type pmin: int
+    :param pmax: maximum order of the polynomial which to check
+    :type pmax: int
+    :param selector: which parameter to evaluate to find the best model order.
+        Options are Schwarz-Bayes Criterior and Akaikes Final Prediction error, defaults to 'sbc'
+    :type selector: str, optional
+    :param no_const: If True, no intercept is fit in the model, defaults to False
+    :type no_const: bool, optional
+    :raises ValueError: _description_
+    :raises ValueError: _description_
+    :raises ValueError: _description_
+    :return: w, A, C, th. w is the estimated parameters, A is the estimated AR coefficients, C is the estimated noise variance, th is the estimated threshold
+    :rtype: np.array, np.array, np.array, np.array
+    """   
 
-    # input checks
+    n,m,ntr = v.shape # dimensions of v
+
     # TODO: is this a good way of checking the input?
     if (not isinstance(pmin, int)) | (not isinstance(pmax, int)):
         raise ValueError("Orders must be integers")
@@ -26,7 +39,6 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
 
     ne      = ntr*(n-pmax) # number of block equations of size m
     npmax	= m*pmax+mcor # maximum number of parameter vectors of length m
-
 
     if (ne <= npmax):
         raise ValueError('Time series too short.')
@@ -41,16 +53,11 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
         popt = pmin + np.argmin(sbc)
     elif selector == 'fpe':
         popt = pmin + np.argmin(fpe)
-
     nnp = m*popt + mcor # number of parameter vectors of length m
-
-
     # decompose R for the optimal model order popt according to 
-    #
     #     | R11  R12 |
     # R = |          |
     #     | 0    R22 |
-    #
 
     R11   = R[0:nnp, 0:nnp]
     R12   = R[0:nnp, (npmax+1)-1:npmax+m]
@@ -76,14 +83,13 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
 
     else:
         # no parameters have estimated
-        # return only covariance matrix estimate and order selection criterion
-        w = np.zeros((m,1))
+        w = np.zeros((m,1)) # return only covariance matrix estimate and order selection criterion
+
         A = []
 
     # return covariance matrix
     dof = ne - nnp  # number of block degrees of freedom
     C   = R22.T @ R22/dof # bias-corrected estimate of covariance matrix
-
     invR11 = np.linalg.inv(R11)
 
     if (mcor == 1):
@@ -93,16 +99,23 @@ def arfit(v,pmin,pmax,selector='sbc',no_const=False):
     Uinv   = invR11@invR11.T
     frow   = np.concatenate([np.array([dof]), np.zeros((Uinv.shape[1]-1))], axis=0)
     th     = np.vstack((frow,Uinv))
-
-
-
     return w, A, C, th
 
 
-
-# TODO: commented out reshape ! CHECK THIS!
 def arqr(v, p, mcor):
-    n,m,ntr = v.shape
+    """ QR decomposition 
+
+    :param v: time series data (time x variables x trials)
+    :type v: numpy array
+    :param p: maximum order of the polynomial (pmax from arfit)
+    :type p: int
+    :param mcor: if True, no intercept is fit in the model, defaults to False
+    :type mcor: bool, optional
+    :return: upper triangular matrix R and scale vector
+    :rtype: _type_
+    """    
+
+    n,m,ntr = v.shape # dimensions of v
     ne     = ntr*(n-p)  # number of block equations of size m
     nnp    = m*p+mcor   # number of parameter vectors of size m
 
@@ -130,6 +143,23 @@ def arqr(v, p, mcor):
     return  R, scale
 
 def arord(R, m, mcor, ne, pmin, pmax):
+    """_summary_
+
+    :param R: R matrix from QR decomposition
+    :type R: numpy array
+    :param m: number of variables
+    :type m: int
+    :param mcor:  if True, no intercept is fit in the model, defaults to False
+    :type mcor: bool, optional
+    :param ne: number of block equations of size m
+    :type ne: int
+    :param pmin: minimum order of the polynomial (pmin from arfit)
+    :type pmin: int
+    :param pmax: maximum order of the polynomial (pmax from arfit)
+    :type pmax: int
+    :return: sbc, fpe, logdp, num_p
+    :rtype: _type_
+    """    
 
     imax 	  = pmax-pmin+1 # maximum index of output vectors
 
@@ -139,30 +169,20 @@ def arord(R, m, mcor, ne, pmin, pmax):
     logdp   = np.zeros((imax))     # determinant of (scaled) covariance matrix
     num_p   = np.zeros((imax))     # number of parameter vectors of length m
 
-
-
     num_p[imax-1]= m*pmax+mcor
 
     #Get lower right triangle R22 of R: 
-
     #    | R11  R12 |
     # R= |          |
     #    | 0    R22 |
 
-
     R22     = R[int(num_p[imax-1]+1)-1 : int(num_p[imax-1]+m), int(num_p[imax-1]+1)-1 : int(num_p[imax-1]+m)]
-
-
     # From R22, get inverse of residual cross-product matrix for model of order pmax
     invR22  = np.linalg.inv(R22) # TODO: this is slights different from MATLAB
     Mp      = invR22@invR22.T
 
     # For order selection, get determinant of residual cross-product matrix
-    #       logdp = log det(residual cross-product matrix)
-
     logdp[imax-1] = 2 * np.log(np.abs(np.prod( np.diag(R22) )))
-
-
     # Compute approximate order selection criteria for models of  order pmin:pmax
     i = imax
 
@@ -176,19 +196,16 @@ def arord(R, m, mcor, ne, pmin, pmax):
 
             # Get Mp, the downdated inverse of the residual cross-product matrix, using the Woodbury formula
             L        = np.linalg.cholesky(np.eye(m) + Rp@Mp@Rp.T).T
-
             N        = scipy.linalg.solve(L,Rp*Mp)
             Mp       = Mp - N.T*N
 
             # Get downdated logarithm of determinant
             logdp[i-1] = logdp[i] + 2*np.log(np.abs(np.prod(np.diag(L))))
-
         # Schwarz's Bayesian Criterion
         sbc[i-1] = logdp[i-1]/m - np.log(ne) * (ne-num_p[i-1])/ne
 
         # logarithm of Akaike's Final Prediction Error
         fpe[i-1] = logdp[i-1]/m - np.log(ne*(ne-num_p[i-1])/(ne+num_p[i-1]))
-
         i -= 1
 
     return sbc, fpe, logdp, num_p
@@ -196,7 +213,19 @@ def arord(R, m, mcor, ne, pmin, pmax):
 
 
 def ar_interp(v,A,extrasamp,Fs):
-    Fs = 1000
+    """ Interpolate data based on the esimated AR model
+
+    :param v: time series data (n x m x ntr)
+    :type v: numpy array
+    :param A: estimated AR model (p x m x m x ntr)
+    :type A: numpy array
+    :param extrasamp: number of samples to interpolate
+    :type extrasamp: int
+    :param Fs: sampling frequency
+    :type Fs: int
+    :return: _description_
+    :rtype: _type_
+    """    
     origsamps = len(v) # Number of samples in the to-be-extrapolated signal
     arord     = A.shape[1] # Order of AR
 
@@ -216,8 +245,8 @@ def ar_interp(v,A,extrasamp,Fs):
     return exdat
 
 
-def adjph(x):  # sourcery skip: inline-immediately-returned-variable
-    #  Given a complex matrix X, OX=ADJPH(X) returns the complex matrix OX
+def adjph(x): 
+    """Given a complex matrix X, OX=ADJPH(X) returns the complex matrix OX
     #  that is obtained from X by multiplying column vectors of X with
     #  phase factors exp(i*phi) such that the real part and the imaginary
     #  part of each column vector of OX are orthogonal and the norm of the
@@ -227,17 +256,12 @@ def adjph(x):  # sourcery skip: inline-immediately-returned-variable
     #  Reference:
     #  P.J. Brockwell and R.A. Davis, "Orthogonal Array Analysis,
     #  Second Edition", Prentice-Hall, pp. 30-31, 2000.
-    #  ------------------------------------------------------------------
-    #  Input:
-    #  X      Complex NxM matrix.
-    #  ------------------------------------------------------------------
-    #  Output:
-    #  OX     Complex NxM matrix such that the real part of each column
-    #         vector of OX is orthogonal and the norm of the real part is
-    #         greater than or equal to the norm of the imaginary part.
 
-
-    #x = np.array( [[3+4j, 4+3j] , [12-1j, 6+3j]])
+    :param x: complex N x M matrix
+    :type x: numpy array
+    :return: OX such the real part of each column vector of OX is orthogonal and the norm of the real part is greater than or equal to the norm of the imaginary part
+    :rtype: _type_
+    """    
 
     #  Check input
     [n,m] = x.shape
@@ -251,169 +275,5 @@ def adjph(x):  # sourcery skip: inline-immediately-returned-variable
         if bnorm > anorm:
             phi = phi - np.pi/2 if phi < 0 else phi + np.pi/2
         ox[:,jj] = x[:,jj] * np.exp(1j*phi)
+    return ox
 
-# %%
-
-'''
-time = np.arange(0, 2, 0.01)
-v1    = np.sin(2*np.pi*4*time) #+ np.random.rand(len(time))/10
-v2   = np.cos(2*np.pi*4*time) #+ np.random.rand(len(time))
-#v3   = np.cos(2*np.pi*7*time) + np.random.rand(len(time))
-
-
-v    = np.vstack((v1,v1)).T
-v    = v.reshape((v.shape[0],1,2))
-
-w, A, C, th = arfit(v,1,20,selector='sbc',no_const=False)
-
-
-
-Fs        = 1000
-extrams   = 1000
-origsamps = len(v) # Number of samples in the to-be-extrapolated signal
-arord     = A.shape[1] # Order of AR
-
-nan_array    = np.empty((extrams))
-nan_array[:] = np.nan
-exdat        = np.concatenate([ v[:,0,0] , nan_array], axis=0) # add nan's to the end of the original signal to future extrapolated samples
-for es in np.arange(extrams):
-    currsamp = origsamps+es; # Location of new sample in the vector
-    # For a n order AR model a with noise variance c, value x at time t is given by the
-    # following equation : x(t) = a(1)*x(t-1) + a(2)*x(t-2) + ... +
-    # a(n-1)*x(t-n+1) + a(n)*x(t-n) + sqrt(c)*randnoise
-
-    # extrapolate the signal
-    exdat[currsamp] = np.sum(A * np.flip(exdat[(currsamp-arord) : (currsamp)])) + np.sqrt(np.abs(C)) * np.random.randn(1,1)
-
-
-fig, ax = plt.subplots(3,1,figsize = (8,10),constrained_layout=True)
-fig.tight_layout()
-plt.style.use('dark_background')
-ax[0].plot(v[:,0,0])
-ax[0].plot(v[:,0,1])
-#ax[0].plot(v[:,0,2])
-
-ax[0].set_title('Original Signal')
-ax[1].plot(A[0,:])
-ax[1].set_title('AR Coefficients')
-ax[2].plot(np.arange(200),exdat[:origsamps])
-ax[2].plot(np.arange(200,200+extrams),exdat[origsamps:])
-ax[2].set_title('Extrapolated Signal')
-ax[2].set_xlabel('Time (ms)')
-ax[2].legend(['Original','Extrapolated'])
-
-
-
-
-
-
-
-
-# %%
-
-v = np.random.rand(10,3,2)
-import matplotlib.pyplot as plt
-import numpy as np
-
-time  = np.arange(0, 2, 0.01);
-v     = np.sin(2*np.pi*4*time)
-v     = v.reshape((v.shape[0],1,1))
-
-#v = np.random.rand(10,1,2)
-pmax    = 10
-mcor = 1
-
-"""
-This function fits a polynomial to a set of data points.
-The polynomial is defined by the number of parameters pmin to pmax."""
-# n:   number of time steps (per realization)
-# m:   number of variables (dimension of state vectors) 
-# ntr: number of realizations (trials)
-n,m,ntr = v.shape
-
-#TODO: include input check and set defaults
-
-
-
-
-
-
-
-
-
-
-
-
-
-mcor     = 1 # fit the intercept vector
-selector = 'sbc' # use sbc as order selection criterion
-
-ne      = ntr*(n-pmax);         # number of block equations of size m
-npmax	= m*pmax+mcor;          # maximum number of parameter vectors of length m
-
-R, scale   = arqr(v, pmax, mcor)
-
-#TODO: for now we take the inpuit order as the maximum order. In the future we should include the search through the orders
-
-# temporary
-popt         = pmax
-nnp           = m*popt + mcor # number of parameter vectors of length m
-
-
-# decompose R for the optimal model order popt according to 
-#
-#   | R11  R12 |
-# R=|          |
-#   | 0    R22 |
-#
-
-R11   = R[0:nnp, 0:nnp]
-R12   = R[0:nnp, (npmax+1)-1:npmax+m]    
-R22   = R[(nnp+1)-1:npmax+m, (npmax+1)-1:npmax+m]
-
-if (nnp>0):
-    if (mcor == 1):
-        # improve condition of R11 by rescaling the first column
-        con = np.max(scale[1:npmax+m]) / scale[0]
-        R11[0,0] = R11[0,0] * con
-    Aaug = scipy.linalg.solve(R11, R12).T
-
-    # return coefficint matrix A and intercept vector w separately
-    if (mcor == 1):
-        # intercept vector w is the first column of Aaug, rest of Aaug is the coefficient matrix A
-        w = Aaug[:,0] * con
-        A = Aaug[:,1:nnp]
-
-    else:
-        # return intercept vector of zeros
-        w = np.zeros((m,1))
-        A = Aaug
-
-else:
-    # no parameters have estimated
-    # return only covariance matrix estimate and order selection criterion
-    w = np.zeros((m,1))
-    A = []
-
-# return covariance matrix
-dof = ne - nnp  # number of block degrees of freedom
-C   = R22.T * R22/dof # bias-corrected estimate of covariance matrix
-
-invR11 = np.linalg.inv(R11)
-
-if (mcor == 1):
-    # undo condition improving scaling
-    invR11[0, :] = invR11[0, :] * con
-
-Uinv   = invR11*invR11.T
-frow   = np.concatenate([np.array([dof]), np.zeros((Uinv.shape[1]-1))], axis=0)
-th     = np.vstack((frow,Uinv))
-
-    
-
-fig, ax = plt.subplots(2,1)
-ax[0].plot(time,v[:,0,0])
-ax[1].plot(A[0,:])
-
-# %%
-'''
