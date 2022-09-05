@@ -27,7 +27,6 @@ clc
 %  observation of the process at instant k. The intercept vector w is
 %  included to allow for a nonzero mean of the AR(p) process.
 %
-pause   	% Press any key to continue.
 
 clc
 
@@ -69,9 +68,7 @@ v   = arsim(w, A, C, [n, ntr]);
 %  column index labeling variables. The third index itr=1,...,ntr
 %  labels the realizations.
 %
-pause   	% Press any key to continue.
 
-clc
 
 %  Suppose that we have no information about how the time series
 %  data v are generated, but we want to try to fit an AR model to the
@@ -98,7 +95,6 @@ popt = size(Aest, 2) / m;
 
 disp(['popt = ', num2str(popt)])
 
-pause   	% Press any key to continue.
 
 clc
 

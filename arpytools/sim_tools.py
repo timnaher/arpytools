@@ -6,14 +6,9 @@ import random
 import cmath
 
 
-
-
-def phase_diffusion(freq,
-                    eps=.1,
-                    FS=1000,
-                    nChannels=2,
-                    nSamples=1000,
-                    random_start=True):
+def phase_diffusion(
+    freq, eps=0.1, FS=1000, nChannels=2, nSamples=1000, random_start=True
+):
 
     """
     Linear (harmonic) phase evolution + a Brownian noise term
@@ -63,13 +58,21 @@ def phase_diffusion(freq,
     # add both together
     phases = np.cumsum(lin_incr + brown_incr, axis=0)
 
-    if random_start: # if random start, add a random phase
-        phases += random.uniform(0, 2*np.pi)
+    if random_start:  # if random start, add a random phase
+        phases += random.uniform(0, 2 * np.pi)
 
     return phases % (2 * np.pi)
 
 
-def sim_lfp(osc_freq,nChannels=1,eps=0.1,FS=1000,nSamples=1000,pink_noise_level=1,random_start=True):
+def sim_lfp(
+    osc_freq,
+    nChannels=1,
+    eps=0.1,
+    FS=1000,
+    nSamples=1000,
+    pink_noise_level=1,
+    random_start=True,
+):
     """simulates an lfp singla with a known noisey phase diffusion oscillator and some 1/f noise
 
     Args:
@@ -82,15 +85,28 @@ def sim_lfp(osc_freq,nChannels=1,eps=0.1,FS=1000,nSamples=1000,pink_noise_level=
 
     Returns:
         np.array: chan x time array of simulated lfp
-    """    
-    
-    pdata  = phase_diffusion(freq=osc_freq, nChannels=nChannels,eps=eps,FS=FS,nSamples=nSamples,random_start=random_start)
-    noise  = np.squeeze(cn.powerlaw_psd_gaussian(1,(nChannels, 1, nSamples))) * pink_noise_level
-    lfp    = np.cos(pdata[:,0]) + noise
+    """
+
+    pdata = phase_diffusion(
+        freq=osc_freq,
+        nChannels=nChannels,
+        eps=eps,
+        FS=FS,
+        nSamples=nSamples,
+        random_start=random_start,
+    )
+    noise = (
+        np.squeeze(cn.powerlaw_psd_gaussian(1, (nChannels, 1, nSamples)))
+        * pink_noise_level
+    )
+    lfp = np.cos(pdata[:, 0]) + noise
 
     return lfp, pdata
 
-def propagate_phase(lfp,WIN_SIZE,TARGET_FREQ,FS,NPAD,PROP_LENGTH,window_stop,taper):
+
+def propagate_phase(
+    lfp, WIN_SIZE, TARGET_FREQ, FS, NPAD, PROP_LENGTH, window_stop, taper
+):
     """propagates the phase based on a selected fourier coefficient of the lfp
 
     Args:
@@ -107,25 +123,27 @@ def propagate_phase(lfp,WIN_SIZE,TARGET_FREQ,FS,NPAD,PROP_LENGTH,window_stop,tap
     """
 
     # hann tapered fft to get FCs
-    snippet    = lfp[ (window_stop-WIN_SIZE):window_stop] * taper
-    freqs      = np.fft.rfftfreq(NPAD, 1 / FS)                                    
-    frq_indx   = np.where(freqs==TARGET_FREQ)[0]
-    spec       = np.fft.rfft(snippet,n=NPAD)
-    ph         = np.angle(spec)[frq_indx]                                               
-    prop_ph    = (ph + TARGET_FREQ * 2 * np.pi / FS * np.arange(PROP_LENGTH)) % (2 * np.pi) # modulo 2pi, propagated phase
+    snippet = lfp[(window_stop - WIN_SIZE) : window_stop] * taper
+    freqs = np.fft.rfftfreq(NPAD, 1 / FS)
+    frq_indx = np.where(freqs == TARGET_FREQ)[0]
+    spec = np.fft.rfft(snippet, n=NPAD)
+    ph = np.angle(spec)[frq_indx]
+    prop_ph = (ph + TARGET_FREQ * 2 * np.pi / FS * np.arange(PROP_LENGTH)) % (
+        2 * np.pi
+    )  # modulo 2pi, propagated phase
 
     return prop_ph
 
 
-def get_w_at(k,N):
+def get_w_at(k, N):
     # make hann taper
     w_s = 0.5 * (1 - np.cos(2 * np.pi * np.arange(N) / (N - 1)))
     # get hann phase
-    w_s_phase = np.angle(sig.hilbert(w_s)) 
-    
-    w_at      = np.empty(N)
-    for n in range(N):
-        w_at[n] =   w_s[n] * cmath.exp(k * w_s_phase[n]) 
+    w_s_phase = np.angle(sig.hilbert(w_s))
 
-    c = N / (2 * np.sum(w_at)) # normalization factor
-    return w_s, w_at*c # normalize and return
+    w_at = np.empty(N)
+    for n in range(N):
+        w_at[n] = w_s[n] * cmath.exp(k * w_s_phase[n])
+
+    c = N / (2 * np.sum(w_at))  # normalization factor
+    return w_s, w_at * c  # normalize and return
